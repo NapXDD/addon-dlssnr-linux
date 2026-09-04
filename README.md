@@ -47,6 +47,11 @@ every push also uploads them as a downloadable CI artifact), or build them yours
 - The DLSS Neural Rendering model **`nvngx_dlssnr.dll`** present beside the game executable. It is
   NVIDIA's and is *not* shipped here; the add-on only drives it.
 
+> **First, make sure the game itself runs on Proton.** Check
+> [ProtonDB](https://www.protondb.com/) for the game's rating before trying this add-on — if the
+> game isn't Playable/Gold/Platinum (or is blocked by anti-cheat) under Proton, the add-on can't
+> help. This add-on assumes the game already launches and runs under Proton with DLSS working.
+
 ### Steps
 
 1. Install ReShade (add-on support enabled) for the game. Its `dxgi.dll` and `ReShade.ini` should
