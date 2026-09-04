@@ -113,7 +113,8 @@ local build drop straight into your game or testbed folders, create an executabl
 that copies `build/dlssnr-linux.addon64` and `build/nvngx.dll_nrfwd.dll` wherever you need them.
 `build.sh --test` compiles the e2e test hooks in and marks the output (`build/.test-build`) so a
 deploy script can keep test builds out of game folders — `test/e2e-preset-crash.sh` uses that
-build to regression-test the retire/rebuild path against the DLSS SDK sample app.
+build to regression-test the retire/rebuild path against the DLSS SDK sample app. See
+[`test/README.md`](test/README.md) for the testbed setup and how to run it.
 
 ## Issues & support
 
