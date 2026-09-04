@@ -38,6 +38,9 @@ forwarder). Grab them from a [GitHub Release](../../releases) (every version tag
 every push also uploads them as a downloadable CI artifact), or build them yourself (see below —
 `build.sh` copies them straight into the game folder for you).
 
+See the [**Tested Games**](https://github.com/NapXDD/addon-dlssnr-linux/wiki/Tested-Games) wiki
+page for titles this has been tried in — and please add your own results there.
+
 ### Prerequisites
 
 - An **RTX 50-series** GPU — DLSSNR is RTX 50 only — with a recent NVIDIA driver (≥ 616.56).
