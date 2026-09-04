@@ -4,7 +4,7 @@
 [![license: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 
 A ReShade add-on that makes **NVIDIA DLSS 5 Neural Rendering** (DLSSNR — NGX feature 18)
-run on **Linux / Proton**, tested in *Wuthering Waves*.
+run on **Linux / Proton**.
 
 The closed RenoDX DLSS5 add-on produces a black screen on Linux because the driver-dispatched
 feature 18 fails `FAIL_OutOfDate`: the NGX OTA updater it relies on is unavailable under Proton.
@@ -31,12 +31,40 @@ Cinematic), and the three DLSS5 model intensities: **NR intensity** (`DLSSNR.Int
 **Structure intensity** (`DLSSNR.LocalStructureStrength`), **Global intensity**
 (`DLSSNR.LocalToneStrength`).
 
-## Installing a prebuilt release
+## Installing the build
 
-Each version tag publishes a [GitHub Release](../../releases) with the two files you need —
-`nr-linux-probe.addon64` (the add-on) and `nvngx.dll_nrfwd.dll` (the forwarder). Drop both beside
-the game executable (for *Wuthering Waves*: `Client/Binaries/Win64/`), alongside a ReShade install
-with add-on support enabled. Every push also uploads the same files as a downloadable CI artifact.
+You need two files — `nr-linux-probe.addon64` (the add-on) and `nvngx.dll_nrfwd.dll` (the
+forwarder). Grab them from a [GitHub Release](../../releases) (every version tag attaches both;
+every push also uploads them as a downloadable CI artifact), or build them yourself (see below —
+`build.sh` copies them straight into the game folder for you).
+
+### Prerequisites
+
+- An **RTX 50-series** GPU — DLSSNR is RTX 50 only — with a recent NVIDIA driver (≥ 616.56).
+- **Proton** with NVAPI/NGX enabled, and **DLSS (Super Resolution) turned on in-game**: this add-on
+  runs off the game's DLSS-SR output, so DLSS must be active.
+- **ReShade with add-on support** installed for the game's DX12 renderer (the `dxgi` variant).
+- The DLSS Neural Rendering model **`nvngx_dlssnr.dll`** present beside the game executable. It is
+  NVIDIA's and is *not* shipped here; the add-on only drives it.
+
+### Steps
+
+1. Install ReShade (add-on support enabled) for the game. Its `dxgi.dll` and `ReShade.ini` should
+   sit in the same folder as the game executable.
+2. Copy **both** `nr-linux-probe.addon64` and `nvngx.dll_nrfwd.dll` into that folder, next to the
+   game executable and `nvngx_dlssnr.dll`.
+3. Set Steam launch options so Proton exposes NVAPI/NGX and loads ReShade's `dxgi`, e.g.:
+
+   ```
+   PROTON_ENABLE_NVAPI=1 WINEDLLOVERRIDES="dxgi=n,b" %command%
+   ```
+
+4. Launch the game, enable **DLSS** in the graphics settings, then open the ReShade overlay
+   (**Home** key) → **Add-ons** tab → **DLSSNR Linux**. Press **F10** any time to A/B toggle the
+   pass. `ReShade.log` beside the exe records `nr-fwd:` lines if you need to check it loaded.
+
+> ⚠️ Third-party add-ons in an online game with anti-cheat carry a risk to your account. Use at
+> your own risk.
 
 ## Building
 
@@ -57,6 +85,10 @@ bash build.sh
 `install-deps.sh` supports dnf / apt / pacman / zypper for the system packages (needs `sudo` for
 those) and downloads the rest into your home directory. See `build.sh` for the exact paths it
 expects.
+
+`build.sh` writes the two files to `build/` and, if it finds the configured target folders,
+**auto-deploys** them there — so a local build drops straight into place with no manual copy.
+Adjust those deploy paths at the bottom of `build.sh` for your install.
 
 ## Credits & acknowledgements
 
