@@ -23,10 +23,22 @@ install_system_packages() {
   if [[ $EUID -ne 0 ]]; then SUDO="sudo"; fi
 
   if command -v dnf >/dev/null 2>&1; then
+    # Fedora's clang is already >= 19 (what the MSVC STL asserts).
     $SUDO dnf install -y clang lld llvm python3 git curl tar
   elif command -v apt-get >/dev/null 2>&1; then
+    # Ubuntu's default clang (18 on 24.04) is too old: the MSVC STL that xwin
+    # splats asserts "Clang 19.0.0 or newer". Pull a recent clang/lld from
+    # apt.llvm.org and expose it under the unversioned names build.sh calls.
+    local LLVM_VER=19
     $SUDO apt-get update
-    $SUDO apt-get install -y clang lld llvm python3 git curl tar ca-certificates
+    $SUDO apt-get install -y python3 git curl wget tar ca-certificates gnupg lsb-release
+    curl -fsSL https://apt.llvm.org/llvm.sh -o /tmp/llvm.sh
+    chmod +x /tmp/llvm.sh
+    $SUDO /tmp/llvm.sh "$LLVM_VER"
+    $SUDO apt-get install -y "clang-$LLVM_VER" "lld-$LLVM_VER" "llvm-$LLVM_VER"
+    for t in clang clang++ lld ld.lld; do
+      $SUDO ln -sf "/usr/bin/${t}-$LLVM_VER" "/usr/local/bin/${t}"
+    done
   elif command -v pacman >/dev/null 2>&1; then
     $SUDO pacman -Sy --needed --noconfirm clang lld llvm python git curl tar
   elif command -v zypper >/dev/null 2>&1; then
