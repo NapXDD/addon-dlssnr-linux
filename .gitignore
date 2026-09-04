@@ -1,0 +1,6 @@
+# Build output (compiled addon, forwarder, cached objects, embedded shader headers)
+/build/
+
+# Editor / OS cruft
+*.swp
+.DS_Store
