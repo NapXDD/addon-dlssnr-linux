@@ -26,10 +26,12 @@
 
 #include <bcrypt.h>
 
+#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <vector>
 
 #include <d3d12.h>
 #include <nvsdk_ngx.h>
@@ -159,7 +161,10 @@ struct State {
   uint32_t eval_count = 0;
   uint32_t fail_streak = 0;
 
-  Grave graveyard[8] = {};
+  // Set by the overlay thread (Apply button); consumed on the evaluate thread.
+  std::atomic<bool> retire_pending{false};
+
+  std::vector<Grave> graveyard;
 
   wchar_t game_dir[MAX_PATH] = {};
 };
@@ -277,8 +282,11 @@ inline void LogModelIdentityAsync(const wchar_t* model_path) {
 // --- lifetime ------------------------------------------------------------
 
 // The GPU may still be executing command lists that reference a retired feature or texture, so
-// they wait in the graveyard for a couple hundred frames before release.
+// they wait in the graveyard for a couple hundred frames before release. The graveyard grows as
+// needed: releasing early instead used to free a texture the GPU was still reading -- three quick
+// Apply presses overflowed the old fixed 8 slots and killed the device (issue #1).
 inline void Bury(ID3D12Resource* resource, void* feature) {
+  if (resource == nullptr && feature == nullptr) return;
   for (auto& g : s.graveyard) {
     if (g.resource == nullptr && g.feature == nullptr) {
       g.resource = resource;
@@ -287,9 +295,7 @@ inline void Bury(ID3D12Resource* resource, void* feature) {
       return;
     }
   }
-  // Graveyard full: release the oldest-style way -- immediately. Better a rare hazard than a leak.
-  if (resource != nullptr) resource->Release();
-  if (feature != nullptr && s.release != nullptr) s.release(feature);
+  s.graveyard.push_back({resource, feature, kGraveyardFrames});
 }
 
 inline void TickGraveyard() {
@@ -302,9 +308,9 @@ inline void TickGraveyard() {
   }
 }
 
-inline void RetireFeature() {
+inline void RetireFeature(const char* why) {
   if (s.feature == nullptr && s.output == nullptr) return;
-  ngx_probe::Log("nr-fwd: retiring NR feature (geometry changed)");
+  ngx_probe::Logf("nr-fwd: retiring NR feature (%s)", why);
   Bury(s.output, s.feature);
   Bury(s.color_copy, nullptr);
   Bury(s.proxy, nullptr);
@@ -324,7 +330,8 @@ inline void OnDlssCreate(unsigned w, unsigned h, unsigned ow, unsigned oh, int f
   s.out_w = ow;
   s.out_h = oh;
   s.create_flags = flags;
-  if (s.feature != nullptr && (s.feature_w != ow || s.feature_h != oh)) RetireFeature();
+  if (s.feature != nullptr && (s.feature_w != ow || s.feature_h != oh))
+    RetireFeature("geometry changed");
 }
 
 // Process teardown: pointers in the shared block must not outlive us.
@@ -369,8 +376,35 @@ inline bool IsEnabled() { return s.enabled; }
 
 // --- setup ---------------------------------------------------------------
 
+#if defined(DLSSNR_TEST_HOOKS)
+// Only in the test build (build.sh --test): DLSSNR_TEST_RETIRE_EVERY=N forces the same retire the
+// overlay's Apply button triggers, every N evaluates, so the e2e test can exercise the
+// retire/rebuild path deterministically without clicking ImGui. The release build compiles none
+// of this.
+inline uint32_t test_retire_every = 0;
+
+inline void ReadTestHooks() {
+  static bool done = false;
+  if (done) return;
+  done = true;
+  char buf[16] = {};
+  if (GetEnvironmentVariableA("DLSSNR_TEST_RETIRE_EVERY", buf, sizeof(buf)) > 0) {
+    test_retire_every = (uint32_t)atoi(buf);
+    if (test_retire_every != 0) {
+      ngx_probe::Warnf(
+          "nr-fwd: TEST MODE -- forcing a model-settings retire every %u evaluates "
+          "(DLSSNR_TEST_RETIRE_EVERY)",
+          test_retire_every);
+    }
+  }
+}
+#endif
+
 inline bool EnsureSetup(ID3D12GraphicsCommandList* cmd) {
   if (s.caps != nullptr && s.forwarder != nullptr) return true;
+#if defined(DLSSNR_TEST_HOOKS)
+  ReadTestHooks();
+#endif
 
   // Everything lives beside the game exe: the forwarder, the model, and our data path.
   if (s.game_dir[0] == 0) {
@@ -482,8 +516,10 @@ inline void WriteTuning(void* p) {
 }
 
 // Called by the overlay after the create-time model settings changed: the model reads them only
-// while building the feature, so it is retired and rebuilt on the next frame.
-inline void ApplyModelSettings() { RetireFeature(); }
+// while building the feature, so it is retired and rebuilt. The overlay runs on the present
+// thread while the evaluate thread owns the feature and textures, so only a flag is set here;
+// the retire itself executes at the top of the next OnDlssEvaluated, on the owning thread.
+inline void ApplyModelSettings() { s.retire_pending.store(true, std::memory_order_relaxed); }
 
 inline bool EnsureFeature(ID3D12GraphicsCommandList* cmd) {
   if (s.feature != nullptr) return true;
@@ -641,11 +677,20 @@ inline void OnDlssEvaluated(ID3D12GraphicsCommandList* cmd, const NVSDK_NGX_Para
   if (s.out_w == 0 || s.out_h == 0) return;  // no DLSS-SR create seen yet
 
   TickGraveyard();
+  if (s.retire_pending.exchange(false, std::memory_order_relaxed))
+    RetireFeature("model settings changed");
   if (!s.enabled) return;
 
   if (!EnsureSetup(cmd)) return;
   if (!EnsureFeature(cmd)) return;
   Evaluate(cmd, game_params);
+
+#if defined(DLSSNR_TEST_HOOKS)
+  if (test_retire_every != 0 && s.feature != nullptr && s.eval_count != 0 &&
+      s.eval_count % test_retire_every == 0) {
+    ApplyModelSettings();
+  }
+#endif
 }
 
 }  // namespace nr_runner

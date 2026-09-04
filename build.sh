@@ -5,6 +5,14 @@
 # unlike MinGW GCC, whose sret convention crashes on calls like get_resource_desc.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
+
+# --test compiles the e2e hooks in (DLSSNR_TEST_HOOKS) and deploys only to the
+# demo testbed, never to game folders. The default build ships no test code.
+TEST_BUILD=0
+if [[ "${1:-}" == "--test" ]]; then
+  TEST_BUILD=1
+  shift
+fi
 RENODX="$HOME/projects/renodx"
 RESHADE_INC="$RENODX/external/reshade/include"
 IMGUI_INC="$RENODX/external/reshade/deps/imgui"
@@ -27,6 +35,10 @@ CFLAGS=(
   -isystem "$XWIN/sdk/include/um"
   -isystem "$XWIN/sdk/include/shared"
 )
+if [[ "$TEST_BUILD" == 1 ]]; then
+  CFLAGS+=(-DDLSSNR_TEST_HOOKS)
+  echo "TEST BUILD: e2e hooks compiled in; deploying to the demo testbed only"
+fi
 LDFLAGS=(
   -L "$XWIN/crt/lib/x86_64"
   -L "$XWIN/sdk/lib/um/x86_64"
@@ -87,13 +99,14 @@ echo "built: $OUT/nvngx.dll_nrfwd.dll"
 DEMO_DIR="$HOME/projects/dlss-testbed/DLSS_Sample_App/bin/ngx_dlss_demo"
 if [[ -d "$DEMO_DIR" ]]; then
   rm -f "$DEMO_DIR/nr-linux-probe.addon64"  # pre-rename artifact
-  cp "$OUT/dlssnr-linux.addon64" "$DEMO_DIR/"
+  cp "$OUT/dlssnr-linux.addon64" "$OUT/nvngx.dll_nrfwd.dll" "$DEMO_DIR/"
   echo "deployed to: $DEMO_DIR"
 fi
 
 # Deploy into Wuthering Waves (milestone 3: capture Reserved18 create/eval).
+# Never the test build: game folders only ever get shipping code.
 WUWA_DIR="$HOME/.local/share/Steam/steamapps/common/Wuthering Waves/Client/Binaries/Win64"
-if [[ -d "$WUWA_DIR" ]]; then
+if [[ "$TEST_BUILD" == 0 && -d "$WUWA_DIR" ]]; then
   rm -f "$WUWA_DIR/nr-linux-probe.addon64"  # pre-rename artifact
   cp "$OUT/dlssnr-linux.addon64" "$OUT/nvngx.dll_nrfwd.dll" "$WUWA_DIR/"
   echo "deployed to: $WUWA_DIR"
