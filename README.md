@@ -30,13 +30,23 @@ Cinematic), and the three DLSS5 model intensities: **NR intensity** (`DLSSNR.Int
 
 ## Building
 
+Install the toolchain and dependencies once (LLVM/clang + LLD, the xwin-provided MSVC SDK at
+`~/.xwin`, a standalone Linux DXC at `~/.local/dxc`, and the RenoDX checkout at `~/projects/renodx`
+for the ReShade / DLSS / Detours / ImGui headers):
+
+```bash
+bash install-deps.sh
+```
+
+It's idempotent — it skips anything already present. Then build:
+
 ```bash
 bash build.sh
 ```
 
-Requires clang/LLD with an xwin-provided MSVC SDK (`~/.xwin`), a standalone DXC
-(`~/.local/dxc`), and the RenoDX checkout beside this repo for the ReShade / DLSS / Detours /
-ImGui headers. See `build.sh` for the exact paths.
+`install-deps.sh` supports dnf / apt / pacman / zypper for the system packages (needs `sudo` for
+those) and downloads the rest into your home directory. See `build.sh` for the exact paths it
+expects.
 
 ## Credits & acknowledgements
 
