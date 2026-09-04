@@ -74,11 +74,25 @@ wiki and please report your own setup.
    sit in the same folder as the game executable.
 2. Copy **both** `dlssnr-linux.addon64` and `nvngx.dll_nrfwd.dll` into that folder, next to the
    game executable and `nvngx_dlssnr.dll`.
-3. Set Steam launch options so Proton exposes NVAPI/NGX and loads ReShade's `dxgi`, e.g.:
+3. Set Steam launch options so Proton exposes NVAPI/NGX and loads ReShade's `dxgi`. The NVAPI
+   variable depends on which Proton build you run:
+
+   **Valve Proton** (Steam's built-in):
 
    ```
    PROTON_ENABLE_NVAPI=1 WINEDLLOVERRIDES="dxgi=n,b" %command%
    ```
+
+   **GE-Proton / proton-cachyos** — NVAPI is already on by default and `PROTON_ENABLE_NVAPI`
+   does not exist there (these builds only know `PROTON_FORCE_NVAPI` / `PROTON_DISABLE_NVAPI`).
+   Forcing it on covers games on the NVAPI blocklist:
+
+   ```
+   PROTON_FORCE_NVAPI=1 WINEDLLOVERRIDES="dxgi=n,b" %command%
+   ```
+
+   If you use ReShade effects and copied its `d3dcompiler_47.dll` beside the game, add
+   `;d3dcompiler_47=n,b` inside `WINEDLLOVERRIDES`.
 
 4. Launch the game, enable **DLSS** in the graphics settings, then open the ReShade overlay
    (**Home** key) → **Add-ons** tab → **DLSSNR Linux**. Press **F10** any time to A/B toggle the

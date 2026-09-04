@@ -27,8 +27,9 @@ the SDK source with CMake + Visual Studio; the prebuilt package is much less eff
 ### 2. Proton and runtime
 
 - **GE-Proton** in `~/.local/share/Steam/compatibilitytools.d/` (tested: GE-Proton11-1). It
-  bundles dxvk-nvapi, which `PROTON_ENABLE_NVAPI=1` switches on — that is what exposes NGX/DLSS
-  inside the prefix.
+  bundles dxvk-nvapi — that is what exposes NGX/DLSS inside the prefix. On GE-Proton (and
+  proton-cachyos) NVAPI is on by default; `PROTON_FORCE_NVAPI=1` forces it even for blocklisted
+  titles. (`PROTON_ENABLE_NVAPI` is a Valve-Proton variable and does not exist on these builds.)
 - **SteamLinuxRuntime_sniper** installed via Steam (it is a free "tool" download; GE-Proton runs
   inside it).
 - An RTX GPU with a driver that supports the DLSS features you want to exercise.
@@ -66,7 +67,7 @@ mkdir -p "$HERE/logs"
 # protonfixes crashes in get_game_id() and the launch silently no-ops.
 export STEAM_COMPAT_CLIENT_INSTALL_PATH="$STEAM"
 export STEAM_COMPAT_DATA_PATH="$HERE/prefix-0"
-export PROTON_ENABLE_NVAPI=1
+export PROTON_FORCE_NVAPI=1  # GE-Proton/cachyos; use PROTON_ENABLE_NVAPI=1 on Valve Proton
 export WINEDLLOVERRIDES="dxgi=n,b;concrt140,msvcp140,vcruntime140,vcruntime140_1=n"
 export DXVK_NVAPI_LOG_PATH="$HERE/logs"
 export DXVK_NVAPI_LOG_LEVEL=info
