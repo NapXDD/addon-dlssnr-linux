@@ -1,5 +1,8 @@
 # addon-dlssnr-linux
 
+[![build](https://github.com/NapXDD/addon-dlssnr-linux/actions/workflows/build.yml/badge.svg)](https://github.com/NapXDD/addon-dlssnr-linux/actions/workflows/build.yml)
+[![license: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
+
 A ReShade add-on that makes **NVIDIA DLSS 5 Neural Rendering** (DLSSNR — NGX feature 18)
 run on **Linux / Proton**, tested in *Wuthering Waves*.
 
