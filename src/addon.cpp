@@ -1,9 +1,8 @@
-// NR Linux probe — milestones 1+2 of the DLSSNR-on-Proton addon.
-// Milestone 1: logs what a ReShade addon actually sees for each swapchain
-// (color space, back buffer format, dimensions) plus whether we run under
-// Wine/Proton. This is the ground truth the color bridge must be driven by.
-// Milestone 2: intercepts NGX CreateFeature/EvaluateFeature (ngx_probe.hpp)
-// and logs the DXGI formats DLSS actually receives and writes.
+// DLSSNR Linux — ReShade addon entry point.
+// Registers the overlay and present hook, logs swapchain ground truth
+// (color space, back buffer format, dimensions, Wine/Proton detection),
+// and installs the NGX CreateFeature/EvaluateFeature interception
+// (ngx_probe.hpp) that the runner and colour bridge are driven by.
 
 #include <windows.h>
 
@@ -149,17 +148,17 @@ void OnDrawOverlay(reshade::api::effect_runtime*) {
 
 }  // namespace
 
-extern "C" __declspec(dllexport) const char* NAME = "NR Linux Probe";
+extern "C" __declspec(dllexport) const char* NAME = "DLSSNR Linux";
 extern "C" __declspec(dllexport) const char* DESCRIPTION =
-    "Swapchain color-space probe + NGX CreateFeature/EvaluateFeature interception under Proton "
-    "(DLSSNR Linux addon, milestones 1+2)";
+    "Runs NVIDIA DLSS 5 Neural Rendering (NGX feature 18) under Linux/Proton by driving the "
+    "game-local snippet directly, with a display-referred colour bridge";
 
 BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
       reshade::log::message(reshade::log::level::info,
-                            "NR Linux Probe loaded (clang x86_64-pc-windows-msvc, built on Linux)");
+                            "DLSSNR Linux loaded (clang x86_64-pc-windows-msvc, built on Linux)");
       LogWineVersion();
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::register_event<reshade::addon_event::present>(OnPresent);

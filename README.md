@@ -33,7 +33,7 @@ Cinematic), and the three DLSS5 model intensities: **NR intensity** (`DLSSNR.Int
 
 ## Installing the build
 
-You need two files — `nr-linux-probe.addon64` (the add-on) and `nvngx.dll_nrfwd.dll` (the
+You need two files — `dlssnr-linux.addon64` (the add-on) and `nvngx.dll_nrfwd.dll` (the
 forwarder). Grab them from a [GitHub Release](../../releases) (every version tag attaches both;
 every push also uploads them as a downloadable CI artifact), or build them yourself (see below —
 `build.sh` copies them straight into the game folder for you).
@@ -51,7 +51,7 @@ every push also uploads them as a downloadable CI artifact), or build them yours
 
 1. Install ReShade (add-on support enabled) for the game. Its `dxgi.dll` and `ReShade.ini` should
    sit in the same folder as the game executable.
-2. Copy **both** `nr-linux-probe.addon64` and `nvngx.dll_nrfwd.dll` into that folder, next to the
+2. Copy **both** `dlssnr-linux.addon64` and `nvngx.dll_nrfwd.dll` into that folder, next to the
    game executable and `nvngx_dlssnr.dll`.
 3. Set Steam launch options so Proton exposes NVAPI/NGX and loads ReShade's `dxgi`, e.g.:
 

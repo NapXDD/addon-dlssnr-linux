@@ -41,7 +41,7 @@ jobs:
         with:
           name: addon-dlssnr-linux
           path: |
-            build/nr-linux-probe.addon64
+            build/dlssnr-linux.addon64
             build/nvngx.dll_nrfwd.dll
 
       # On a version tag (v1.2.3), cut a GitHub Release with the binaries attached.
@@ -51,5 +51,5 @@ jobs:
         with:
           generate_release_notes: true
           files: |
-            build/nr-linux-probe.addon64
+            build/dlssnr-linux.addon64
             build/nvngx.dll_nrfwd.dll

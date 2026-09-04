@@ -71,11 +71,11 @@ done
   -I "$IMGUI_INC" \
   -I "$NGX_INC" \
   -I "$DETOURS_SRC" \
-  -o "$OUT/nr-linux-probe.addon64" \
+  -o "$OUT/dlssnr-linux.addon64" \
   "$HERE/src/addon.cpp" \
   "$DETOURS_OBJ"/detours.obj "$DETOURS_OBJ"/modules.obj "$DETOURS_OBJ"/disasm.obj
 
-echo "built: $OUT/nr-linux-probe.addon64"
+echo "built: $OUT/dlssnr-linux.addon64"
 
 # The DLSSNR forwarder: a bare DLL whose filename contains "nvngx.dll" so the snippet's caller gate
 # accepts it. No ReShade or Detours dependency.
@@ -86,13 +86,15 @@ echo "built: $OUT/nvngx.dll_nrfwd.dll"
 # Deploy straight into the DLSS demo testbed if it exists.
 DEMO_DIR="$HOME/projects/dlss-testbed/DLSS_Sample_App/bin/ngx_dlss_demo"
 if [[ -d "$DEMO_DIR" ]]; then
-  cp "$OUT/nr-linux-probe.addon64" "$DEMO_DIR/"
+  rm -f "$DEMO_DIR/nr-linux-probe.addon64"  # pre-rename artifact
+  cp "$OUT/dlssnr-linux.addon64" "$DEMO_DIR/"
   echo "deployed to: $DEMO_DIR"
 fi
 
 # Deploy into Wuthering Waves (milestone 3: capture Reserved18 create/eval).
 WUWA_DIR="$HOME/.local/share/Steam/steamapps/common/Wuthering Waves/Client/Binaries/Win64"
 if [[ -d "$WUWA_DIR" ]]; then
-  cp "$OUT/nr-linux-probe.addon64" "$OUT/nvngx.dll_nrfwd.dll" "$WUWA_DIR/"
+  rm -f "$WUWA_DIR/nr-linux-probe.addon64"  # pre-rename artifact
+  cp "$OUT/dlssnr-linux.addon64" "$OUT/nvngx.dll_nrfwd.dll" "$WUWA_DIR/"
   echo "deployed to: $WUWA_DIR"
 fi
