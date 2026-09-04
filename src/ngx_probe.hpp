@@ -206,10 +206,32 @@ constexpr uint32_t kHeartbeatEvery = 600;
 // The Reserved18 handle, so evaluates of the NR feature get their own dump.
 inline NVSDK_NGX_Handle* nr_handle = nullptr;
 
+// A detoured export can be reached again from inside the trampoline call: the
+// driver shim we hook (_nvngx.dll) dispatches to a snippet DLL which calls the
+// shim's exported entry point back. Without a guard each hook then calls itself
+// until the stack is exhausted — seen in GTA V Enhanced (a Streamline title) as
+// 10745 identical CreateFeature entries and not one matching return.
+// Nested calls go straight to the real function: no logging, no NR work.
+inline thread_local unsigned hook_depth = 0;
+
+class ReentryGuard {
+ public:
+  ReentryGuard() : outermost_(hook_depth == 0) { ++hook_depth; }
+  ~ReentryGuard() { --hook_depth; }
+  ReentryGuard(const ReentryGuard&) = delete;
+  ReentryGuard& operator=(const ReentryGuard&) = delete;
+  explicit operator bool() const { return outermost_; }
+
+ private:
+  bool outermost_;
+};
+
 static decltype(&NVSDK_NGX_D3D12_CreateFeature) real_D3D12_CreateFeature = nullptr;
 inline NVSDK_NGX_Result NVSDK_CONV HookD3D12CreateFeature(
     ID3D12GraphicsCommandList* cmd_list, NVSDK_NGX_Feature feature_id,
     NVSDK_NGX_Parameter* params, NVSDK_NGX_Handle** out_handle) {
+  ReentryGuard guard;
+  if (!guard) return real_D3D12_CreateFeature(cmd_list, feature_id, params, out_handle);
   Logf("ngx-probe: D3D12_CreateFeature(feature=%d [%s])",
        static_cast<int>(feature_id), FeatureName(feature_id));
   DumpCreateParams(params);
@@ -240,6 +262,8 @@ static decltype(&NVSDK_NGX_D3D12_EvaluateFeature) real_D3D12_EvaluateFeature = n
 inline NVSDK_NGX_Result NVSDK_CONV HookD3D12EvaluateFeature(
     ID3D12GraphicsCommandList* cmd_list, const NVSDK_NGX_Handle* handle,
     const NVSDK_NGX_Parameter* params, PFN_NVSDK_NGX_ProgressCallback callback) {
+  ReentryGuard guard;
+  if (!guard) return real_D3D12_EvaluateFeature(cmd_list, handle, params, callback);
   if (nr_handle != nullptr && handle == nr_handle) {
     static uint32_t nr_count = 0;
     const uint32_t m = ++nr_count;
@@ -268,6 +292,8 @@ inline NVSDK_NGX_Result NVSDK_CONV HookD3D12EvaluateFeature(
 
 static decltype(&NVSDK_NGX_D3D12_ReleaseFeature) real_D3D12_ReleaseFeature = nullptr;
 inline NVSDK_NGX_Result NVSDK_CONV HookD3D12ReleaseFeature(NVSDK_NGX_Handle* handle) {
+  ReentryGuard guard;
+  if (!guard) return real_D3D12_ReleaseFeature(handle);
   Logf("ngx-probe: D3D12_ReleaseFeature handle=%p", static_cast<void*>(handle));
   return real_D3D12_ReleaseFeature(handle);
 }
@@ -276,6 +302,8 @@ static decltype(&NVSDK_NGX_D3D11_CreateFeature) real_D3D11_CreateFeature = nullp
 inline NVSDK_NGX_Result NVSDK_CONV HookD3D11CreateFeature(
     ID3D11DeviceContext* ctx, NVSDK_NGX_Feature feature_id,
     NVSDK_NGX_Parameter* params, NVSDK_NGX_Handle** out_handle) {
+  ReentryGuard guard;
+  if (!guard) return real_D3D11_CreateFeature(ctx, feature_id, params, out_handle);
   Logf("ngx-probe: D3D11_CreateFeature(feature=%d [%s])",
        static_cast<int>(feature_id), FeatureName(feature_id));
   DumpCreateParams(params);
@@ -286,6 +314,8 @@ static decltype(&NVSDK_NGX_D3D11_EvaluateFeature) real_D3D11_EvaluateFeature = n
 inline NVSDK_NGX_Result NVSDK_CONV HookD3D11EvaluateFeature(
     ID3D11DeviceContext* ctx, const NVSDK_NGX_Handle* handle,
     const NVSDK_NGX_Parameter* params, PFN_NVSDK_NGX_ProgressCallback callback) {
+  ReentryGuard guard;
+  if (!guard) return real_D3D11_EvaluateFeature(ctx, handle, params, callback);
   static uint32_t count = 0;
   const uint32_t n = ++count;
   if (n <= kFullDumps) {
