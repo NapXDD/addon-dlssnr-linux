@@ -28,6 +28,13 @@ Cinematic), and the three DLSS5 model intensities: **NR intensity** (`DLSSNR.Int
 **Structure intensity** (`DLSSNR.LocalStructureStrength`), **Global intensity**
 (`DLSSNR.LocalToneStrength`).
 
+## Installing a prebuilt release
+
+Each version tag publishes a [GitHub Release](../../releases) with the two files you need —
+`nr-linux-probe.addon64` (the add-on) and `nvngx.dll_nrfwd.dll` (the forwarder). Drop both beside
+the game executable (for *Wuthering Waves*: `Client/Binaries/Win64/`), alongside a ReShade install
+with add-on support enabled. Every push also uploads the same files as a downloadable CI artifact.
+
 ## Building
 
 Install the toolchain and dependencies once (LLVM/clang + LLD, the xwin-provided MSVC SDK at

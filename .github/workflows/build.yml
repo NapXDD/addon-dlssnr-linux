@@ -1,0 +1,55 @@
+name: build
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to publish releases on tags
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The MSVC SDK (xwin), the standalone DXC, and the RenoDX header checkout
+      # are large and stable -- cache them, keyed on the installer script.
+      - name: Cache SDKs and headers
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.xwin
+            ~/.local/dxc
+            ~/projects/renodx
+          key: deps-${{ runner.os }}-${{ hashFiles('install-deps.sh') }}
+
+      - name: Install build dependencies
+        run: bash install-deps.sh
+
+      - name: Build
+        run: bash build.sh
+
+      # Always publish the built files as a workflow artifact so every push/PR
+      # is downloadable, tag or not.
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: addon-dlssnr-linux
+          path: |
+            build/nr-linux-probe.addon64
+            build/nvngx.dll_nrfwd.dll
+
+      # On a version tag (v1.2.3), cut a GitHub Release with the binaries attached.
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            build/nr-linux-probe.addon64
+            build/nvngx.dll_nrfwd.dll
