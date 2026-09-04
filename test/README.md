@@ -99,7 +99,9 @@ What it does:
 
 1. Builds the add-on with the e2e hooks compiled in (`build.sh --test`, which defines
    `DLSSNR_TEST_HOOKS` and marks the output with `build/.test-build` — release builds contain
-   none of this code) and deploys it into the demo folder.
+   none of this code) and deploys it into the demo folder. All hook code lives in
+   `src/nr_test_hooks.hpp`; the runner only carries `NR_TEST_HOOK_*` macro call sites that
+   expand to nothing in release builds, so grepping `NR_TEST_HOOK` shows every lever.
 2. Runs the demo for 60 s with `DLSSNR_TEST_RETIRE_EVERY=100`: the hook forces the same
    feature retire the overlay's Apply button triggers, every 100 evaluates — deterministically
    inside the graveyard's 240-frame hold window at any framerate.

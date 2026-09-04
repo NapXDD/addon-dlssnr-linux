@@ -196,6 +196,9 @@ inline bool GiveUp(const char* why) {
   return false;
 }
 
+// Test-only e2e levers (NR_TEST_HOOK_* macros); expands to nothing in release builds.
+#include "nr_test_hooks.hpp"
+
 // --- model identity -------------------------------------------------------
 
 // Feature 18 only runs stably with the exact model build it was tested against. A mismatched
@@ -376,35 +379,9 @@ inline bool IsEnabled() { return s.enabled; }
 
 // --- setup ---------------------------------------------------------------
 
-#if defined(DLSSNR_TEST_HOOKS)
-// Only in the test build (build.sh --test): DLSSNR_TEST_RETIRE_EVERY=N forces the same retire the
-// overlay's Apply button triggers, every N evaluates, so the e2e test can exercise the
-// retire/rebuild path deterministically without clicking ImGui. The release build compiles none
-// of this.
-inline uint32_t test_retire_every = 0;
-
-inline void ReadTestHooks() {
-  static bool done = false;
-  if (done) return;
-  done = true;
-  char buf[16] = {};
-  if (GetEnvironmentVariableA("DLSSNR_TEST_RETIRE_EVERY", buf, sizeof(buf)) > 0) {
-    test_retire_every = (uint32_t)atoi(buf);
-    if (test_retire_every != 0) {
-      ngx_probe::Warnf(
-          "nr-fwd: TEST MODE -- forcing a model-settings retire every %u evaluates "
-          "(DLSSNR_TEST_RETIRE_EVERY)",
-          test_retire_every);
-    }
-  }
-}
-#endif
-
 inline bool EnsureSetup(ID3D12GraphicsCommandList* cmd) {
   if (s.caps != nullptr && s.forwarder != nullptr) return true;
-#if defined(DLSSNR_TEST_HOOKS)
-  ReadTestHooks();
-#endif
+  NR_TEST_HOOKS_INIT();
 
   // Everything lives beside the game exe: the forwarder, the model, and our data path.
   if (s.game_dir[0] == 0) {
@@ -685,12 +662,7 @@ inline void OnDlssEvaluated(ID3D12GraphicsCommandList* cmd, const NVSDK_NGX_Para
   if (!EnsureFeature(cmd)) return;
   Evaluate(cmd, game_params);
 
-#if defined(DLSSNR_TEST_HOOKS)
-  if (test_retire_every != 0 && s.feature != nullptr && s.eval_count != 0 &&
-      s.eval_count % test_retire_every == 0) {
-    ApplyModelSettings();
-  }
-#endif
+  NR_TEST_HOOK_AFTER_EVALUATE();
 }
 
 }  // namespace nr_runner
