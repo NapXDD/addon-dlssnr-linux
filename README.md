@@ -50,6 +50,12 @@ page for titles this has been tried in — and please add your own results there
 - **ReShade with add-on support** installed for the game's DX12 renderer (the `dxgi` variant).
 - The DLSS Neural Rendering model **`nvngx_dlssnr.dll`** present beside the game executable. It is
   NVIDIA's and is *not* shipped here; the add-on only drives it.
+  **The model build matters:** the add-on has only run stably with this exact model —
+  `sha256 e16bcf15e16e13f527491cdf7845b2fe6521a738d8f7c9c721866a8496e1fc8e` (165,840,496 bytes).
+  A different model version may not fail cleanly: in testing, a mismatched model reported Success
+  on every evaluate and then **crashed the game minutes into gameplay**. The add-on logs the
+  model's version and SHA-256 to `ReShade.log` at startup (`nr-fwd: model nvngx_dlssnr.dll ...`)
+  and warns when it isn't the tested build.
 
 **Tested environment:** NVIDIA GeForce RTX 5070 · Linux driver **610.57.04** · Fedora · KDE Plasma 6
 (**X11** session, kwin 6.7.3) · Proton. Other RTX 50 cards, drivers, and compositors are expected to
@@ -109,7 +115,8 @@ Adjust those deploy paths at the bottom of `build.sh` for your install.
 Hit a problem, or got it working somewhere new? Please
 [**open an issue**](https://github.com/NapXDD/addon-dlssnr-linux/issues) — I'll try my best to
 answer it. Include your GPU, NVIDIA driver version, Proton build, the game, and any relevant
-`nr-fwd:` lines from `ReShade.log`.
+`nr-fwd:` lines from `ReShade.log` — especially the `nr-fwd: model nvngx_dlssnr.dll ...` line,
+which identifies the model build you were running.
 
 ## Credits & acknowledgements
 

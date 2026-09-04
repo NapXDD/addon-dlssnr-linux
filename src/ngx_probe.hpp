@@ -42,6 +42,15 @@ inline void Logf(const char* fmt, ...) {
   reshade::log::message(reshade::log::level::info, buf);
 }
 
+inline void Warnf(const char* fmt, ...) {
+  char buf[1024];
+  va_list args;
+  va_start(args, fmt);
+  std::vsnprintf(buf, sizeof(buf), fmt, args);
+  va_end(args);
+  reshade::log::message(reshade::log::level::warning, buf);
+}
+
 inline const char* FeatureName(NVSDK_NGX_Feature id) {
   switch (id) {
     case NVSDK_NGX_Feature_SuperSampling: return "SuperSampling (DLSS-SR)";

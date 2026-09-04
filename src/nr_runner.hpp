@@ -24,13 +24,21 @@
 
 #include <windows.h>
 
+#include <bcrypt.h>
+
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #include <d3d12.h>
 #include <nvsdk_ngx.h>
 #include <nvsdk_ngx_defs.h>
 
 #include "nr_compose.hpp"
+
+#pragma comment(lib, "bcrypt")   // SHA-256 of the model DLL
+#pragma comment(lib, "version")  // its file-version resource
 
 namespace nr_runner {
 
@@ -183,6 +191,89 @@ inline bool GiveUp(const char* why) {
   return false;
 }
 
+// --- model identity -------------------------------------------------------
+
+// Feature 18 only runs stably with the exact model build it was tested against. A mismatched
+// nvngx_dlssnr.dll does not fail at the API -- it reports Success on every evaluate and crashes
+// the game minutes later on an unrelated thread. So the model's version and SHA-256 are logged at
+// init (on a background thread; the file is ~160MB), with a warning when it isn't the tested
+// build, so every user report identifies the model that was actually running.
+constexpr char kTestedModelSha256[] =
+    "e16bcf15e16e13f527491cdf7845b2fe6521a738d8f7c9c721866a8496e1fc8e";
+
+inline HANDLE model_id_thread = nullptr;
+
+inline DWORD WINAPI ModelIdentityThread(LPVOID arg) {
+  wchar_t* path = static_cast<wchar_t*>(arg);
+
+  char version[64] = "unknown";
+  DWORD handle = 0;
+  if (const DWORD info_size = GetFileVersionInfoSizeW(path, &handle)) {
+    void* info = std::malloc(info_size);
+    VS_FIXEDFILEINFO* ffi = nullptr;
+    UINT ffi_len = 0;
+    if (info != nullptr && GetFileVersionInfoW(path, 0, info_size, info) &&
+        VerQueryValueW(info, L"\\", reinterpret_cast<void**>(&ffi), &ffi_len) && ffi != nullptr) {
+      std::snprintf(version, sizeof(version), "%u.%u.%u.%u", HIWORD(ffi->dwFileVersionMS),
+                    LOWORD(ffi->dwFileVersionMS), HIWORD(ffi->dwFileVersionLS),
+                    LOWORD(ffi->dwFileVersionLS));
+    }
+    std::free(info);
+  }
+
+  char sha_hex[65] = "unreadable";
+  unsigned long long total = 0;
+  bool hashed = false;
+  const HANDLE file = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                                  FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+  if (file != INVALID_HANDLE_VALUE) {
+    BCRYPT_ALG_HANDLE alg = nullptr;
+    BCRYPT_HASH_HANDLE hash = nullptr;
+    constexpr DWORD kChunk = 1 << 20;
+    void* buf = std::malloc(kChunk);
+    if (buf != nullptr &&
+        BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, nullptr, 0) == 0 &&
+        BCryptCreateHash(alg, &hash, nullptr, 0, nullptr, 0, 0) == 0) {
+      unsigned char digest[32];
+      DWORD read = 0;
+      bool ok = true;
+      while (ReadFile(file, buf, kChunk, &read, nullptr) && read > 0) {
+        if (BCryptHashData(hash, static_cast<PUCHAR>(buf), read, 0) != 0) {
+          ok = false;
+          break;
+        }
+        total += read;
+      }
+      if (ok && BCryptFinishHash(hash, digest, sizeof(digest), 0) == 0) {
+        for (int i = 0; i < 32; ++i) std::snprintf(sha_hex + i * 2, 3, "%02x", digest[i]);
+        hashed = true;
+      }
+    }
+    if (hash != nullptr) BCryptDestroyHash(hash);
+    if (alg != nullptr) BCryptCloseAlgorithmProvider(alg, 0);
+    std::free(buf);
+    CloseHandle(file);
+  }
+
+  ngx_probe::Logf("nr-fwd: model nvngx_dlssnr.dll -- version %s, %llu bytes, sha256=%s", version,
+                  total, sha_hex);
+  if (hashed && std::strcmp(sha_hex, kTestedModelSha256) != 0) {
+    ngx_probe::Warnf(
+        "nr-fwd: this nvngx_dlssnr.dll is NOT the tested model build -- other versions have "
+        "crashed the game mid-session with no API error; tested sha256=%s",
+        kTestedModelSha256);
+  }
+  std::free(path);
+  return 0;
+}
+
+inline void LogModelIdentityAsync(const wchar_t* model_path) {
+  wchar_t* copy = _wcsdup(model_path);
+  if (copy == nullptr) return;
+  model_id_thread = CreateThread(nullptr, 0, ModelIdentityThread, copy, 0, nullptr);
+  if (model_id_thread == nullptr) std::free(copy);
+}
+
 // --- lifetime ------------------------------------------------------------
 
 // The GPU may still be executing command lists that reference a retired feature or texture, so
@@ -238,6 +329,11 @@ inline void OnDlssCreate(unsigned w, unsigned h, unsigned ow, unsigned oh, int f
 
 // Process teardown: pointers in the shared block must not outlive us.
 inline void Shutdown() {
+  if (model_id_thread != nullptr) {
+    WaitForSingleObject(model_id_thread, 3000);  // the hash thread must not outlive the DLL
+    CloseHandle(model_id_thread);
+    model_id_thread = nullptr;
+  }
   if (s.caps != nullptr) {
     void* p = s.caps;
     SetUInt(p, "DLSSNR.Enabled", 0u);
@@ -395,6 +491,9 @@ inline bool EnsureFeature(ID3D12GraphicsCommandList* cmd) {
   if (!s.snippet_inited) {
     wchar_t snippet[MAX_PATH] = {};
     swprintf_s(snippet, L"%s\\nvngx_dlssnr.dll", s.game_dir);
+    // Before init, not after: a mismatched model can crash without ever returning an error, and
+    // the identity line must already be in the log when it does.
+    LogModelIdentityAsync(snippet);
     ID3D12Device* device = nullptr;
     if (FAILED(cmd->GetDevice(IID_PPV_ARGS(&device))) || device == nullptr)
       return GiveUp("could not reach the device for init");
