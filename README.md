@@ -104,6 +104,13 @@ expects.
 **auto-deploys** them there — so a local build drops straight into place with no manual copy.
 Adjust those deploy paths at the bottom of `build.sh` for your install.
 
+## Issues & support
+
+Hit a problem, or got it working somewhere new? Please
+[**open an issue**](https://github.com/NapXDD/addon-dlssnr-linux/issues) — I'll try my best to
+answer it. Include your GPU, NVIDIA driver version, Proton build, the game, and any relevant
+`nr-fwd:` lines from `ReShade.log`.
+
 ## Credits & acknowledgements
 
 This project was studied from, and stands on, the following work. Please support the originals.
