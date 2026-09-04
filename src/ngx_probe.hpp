@@ -359,6 +359,16 @@ inline bool TryInstall() {
       Logf("ngx-probe: %s not exported by %s", entry.export_name, module_name);
       continue;
     }
+    // Never patch over a jmp that is already there. If a detour is still in
+    // place, Detours copies that jmp into the new trampoline as if it were the
+    // original prologue, and calling the trampoline lands back in the detour
+    // region -- a cycle. Uninstall() below is what normally prevents this; this
+    // check is the backstop.
+    if (*reinterpret_cast<const unsigned char*>(proc) == 0xe9) {
+      Logf("ngx-probe: %s already begins with a jmp - refusing to stack a detour",
+           entry.export_name);
+      continue;
+    }
     *entry.real = reinterpret_cast<void*>(proc);
     if (DetourAttach(entry.real, entry.hook) != NO_ERROR) {
       Logf("ngx-probe: DetourAttach failed for %s", entry.export_name);
@@ -378,6 +388,48 @@ inline bool TryInstall() {
   installed = true;
   Logf("ngx-probe: hooked %d NGX exports on %s", attached, module_name);
   return true;
+}
+
+
+// Detach everything TryInstall attached, and let a later load re-attach cleanly.
+//
+// ReShade loads and unloads an add-on several times while the device is being
+// created -- six register/unregister cycles in GTA V Enhanced under Proton.
+// DllMain(DLL_PROCESS_DETACH) unregistered from ReShade but left the detours in
+// place, and because the DLL itself is unloaded the `installed` flag went back
+// to false, so the next load patched the export again, on top of its own detour.
+//
+// From the third install the exported entry read
+//
+//     e9 63 01 fd bf  57 41 56 41 57 ...      (a jmp, not the prologue)
+//
+// and the trampoline Detours built from it began with that copied jmp, so
+// calling the trampoline re-entered an older hook. Depth reached 8000 in one
+// millisecond and the game hung.
+inline void Uninstall() {
+  if (!installed) return;
+  if (DetourTransactionBegin() != NO_ERROR) {
+    Log("ngx-probe: DetourTransactionBegin failed on uninstall");
+    return;
+  }
+  DetourUpdateThread(GetCurrentThread());
+  int detached = 0;
+  for (const auto& entry : kHooks) {
+    if (*entry.real == nullptr) continue;
+    if (DetourDetach(entry.real, entry.hook) != NO_ERROR) {
+      Logf("ngx-probe: DetourDetach failed for %s", entry.export_name);
+      continue;
+    }
+    ++detached;
+  }
+  if (DetourTransactionCommit() != NO_ERROR) {
+    Log("ngx-probe: DetourTransactionCommit failed on uninstall");
+    DetourTransactionAbort();
+    return;
+  }
+  for (const auto& entry : kHooks) *entry.real = nullptr;
+  installed = false;
+  Logf("ngx-probe: detached %d NGX hooks", detached);
 }
 
 }  // namespace ngx_probe

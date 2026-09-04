@@ -225,6 +225,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID) {
       ngx_probe::TryInstall();  // in case NGX is already resident
       break;
     case DLL_PROCESS_DETACH:
+      ngx_probe::Uninstall();
       nr_runner::Shutdown();
       reshade::unregister_overlay("DLSSNR Linux", OnDrawOverlay);
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);
