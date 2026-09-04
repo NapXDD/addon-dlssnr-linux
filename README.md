@@ -43,8 +43,9 @@ page for titles this has been tried in — and please add your own results there
 
 ### Prerequisites
 
-- An **RTX 50-series** GPU — DLSSNR is RTX 50 only — with a recent NVIDIA driver branch that
-  supports DLSS Neural Rendering.
+- An **RTX 50-series or RTX 40-series** GPU, with a recent NVIDIA driver branch that supports
+  DLSS Neural Rendering. The `nvngx_dlssnr.dll` model supports both generations; this add-on has
+  only been tested on RTX 50 so far, but is expected to work on RTX 40 — reports welcome.
 - **Proton** with NVAPI/NGX enabled, and **DLSS (Super Resolution) turned on in-game**: this add-on
   runs off the game's DLSS-SR output, so DLSS must be active.
 - **ReShade with add-on support** installed for the game's DX12 renderer (the `dxgi` variant).
@@ -58,8 +59,8 @@ page for titles this has been tried in — and please add your own results there
   and warns when it isn't the tested build.
 
 **Tested environment:** NVIDIA GeForce RTX 5070 · Linux driver **610.57.04** · Fedora · KDE Plasma 6
-(**X11** session, kwin 6.7.3) · Proton. Other RTX 50 cards, drivers, and compositors are expected to
-work but are untested — see the [Tested Games](https://github.com/NapXDD/addon-dlssnr-linux/wiki/Tested-Games)
+(**X11** session, kwin 6.7.3) · Proton. Other RTX 50/40 cards, drivers, and compositors are expected
+to work but are untested — see the [Tested Games](https://github.com/NapXDD/addon-dlssnr-linux/wiki/Tested-Games)
 wiki and please report your own setup.
 
 > **First, make sure the game itself runs on Proton.** Check
