@@ -35,8 +35,10 @@ if [[ ! -f "$DEMO_DIR/nvngx_dlssnr.dll" ]]; then
   cp "$WUWA_DIR/nvngx_dlssnr.dll" "$DEMO_DIR/"
 fi
 
-echo "== building test build (hooks compiled in, demo-only deploy)"
+echo "== building test build (hooks compiled in)"
 bash "$HERE/build.sh" --test || fail "build failed"
+cp "$HERE/build/dlssnr-linux.addon64" "$HERE/build/nvngx.dll_nrfwd.dll" "$DEMO_DIR/" \
+  || fail "could not deploy the test build into the demo folder"
 
 rm -f "$LOG"
 echo "== running demo for ${RUN_SECONDS}s with a forced retire every $RETIRE_EVERY evaluates"

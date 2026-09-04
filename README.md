@@ -107,9 +107,13 @@ bash build.sh
 those) and downloads the rest into your home directory. See `build.sh` for the exact paths it
 expects.
 
-`build.sh` writes the two files to `build/` and, if it finds the configured target folders,
-**auto-deploys** them there — so a local build drops straight into place with no manual copy.
-Adjust those deploy paths at the bottom of `build.sh` for your install.
+`build.sh` writes the two files to `build/` — it is a pure build, with no deploy step. To have a
+local build drop straight into your game or testbed folders, create an executable
+`deploy.local.sh` next to it (untracked; `build.sh` runs it after a successful build if present)
+that copies `build/dlssnr-linux.addon64` and `build/nvngx.dll_nrfwd.dll` wherever you need them.
+`build.sh --test` compiles the e2e test hooks in and marks the output (`build/.test-build`) so a
+deploy script can keep test builds out of game folders — `test/e2e-preset-crash.sh` uses that
+build to regression-test the retire/rebuild path against the DLSS SDK sample app.
 
 ## Issues & support
 

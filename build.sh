@@ -37,7 +37,7 @@ CFLAGS=(
 )
 if [[ "$TEST_BUILD" == 1 ]]; then
   CFLAGS+=(-DDLSSNR_TEST_HOOKS)
-  echo "TEST BUILD: e2e hooks compiled in; deploying to the demo testbed only"
+  echo "TEST BUILD: e2e hooks compiled in; output marked with build/.test-build"
 fi
 LDFLAGS=(
   -L "$XWIN/crt/lib/x86_64"
@@ -95,19 +95,17 @@ echo "built: $OUT/dlssnr-linux.addon64"
   -o "$OUT/nvngx.dll_nrfwd.dll" "$HERE/src/forwarder/nr_forwarder.cpp"
 echo "built: $OUT/nvngx.dll_nrfwd.dll"
 
-# Deploy straight into the DLSS demo testbed if it exists.
-DEMO_DIR="$HOME/projects/dlss-testbed/DLSS_Sample_App/bin/ngx_dlss_demo"
-if [[ -d "$DEMO_DIR" ]]; then
-  rm -f "$DEMO_DIR/nr-linux-probe.addon64"  # pre-rename artifact
-  cp "$OUT/dlssnr-linux.addon64" "$OUT/nvngx.dll_nrfwd.dll" "$DEMO_DIR/"
-  echo "deployed to: $DEMO_DIR"
+# Record whether this build carries the e2e hooks, so a deploy script can refuse
+# to put a test build into a game folder.
+if [[ "$TEST_BUILD" == 1 ]]; then
+  touch "$OUT/.test-build"
+else
+  rm -f "$OUT/.test-build"
 fi
 
-# Deploy into Wuthering Waves (milestone 3: capture Reserved18 create/eval).
-# Never the test build: game folders only ever get shipping code.
-WUWA_DIR="$HOME/.local/share/Steam/steamapps/common/Wuthering Waves/Client/Binaries/Win64"
-if [[ "$TEST_BUILD" == 0 && -d "$WUWA_DIR" ]]; then
-  rm -f "$WUWA_DIR/nr-linux-probe.addon64"  # pre-rename artifact
-  cp "$OUT/dlssnr-linux.addon64" "$OUT/nvngx.dll_nrfwd.dll" "$WUWA_DIR/"
-  echo "deployed to: $WUWA_DIR"
+# Deployment is deliberately not done here: build.sh is pure build. Machine-local
+# deployment lives in an untracked deploy.local.sh (run it after building), and
+# end-user installs are handled by the auto-install tool.
+if [[ -x "$HERE/deploy.local.sh" ]]; then
+  "$HERE/deploy.local.sh"
 fi

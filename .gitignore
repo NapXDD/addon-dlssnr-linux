@@ -1,6 +1,9 @@
 # Build output (compiled addon, forwarder, cached objects, embedded shader headers)
 /build/
 
+# Machine-local deployment hook (invoked by build.sh if present; never committed)
+/deploy.local.sh
+
 # Editor / OS cruft
 *.swp
 .DS_Store
