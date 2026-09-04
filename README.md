@@ -83,16 +83,16 @@ wiki and please report your own setup.
    PROTON_ENABLE_NVAPI=1 WINEDLLOVERRIDES="dxgi=n,b" %command%
    ```
 
-   **GE-Proton / proton-cachyos** — NVAPI is already on by default and `PROTON_ENABLE_NVAPI`
-   does not exist there (these builds only know `PROTON_FORCE_NVAPI` / `PROTON_DISABLE_NVAPI`).
-   Forcing it on covers games on the NVAPI blocklist:
+   **GE-Proton / proton-cachyos** (`PROTON_ENABLE_NVAPI` does not exist on these builds):
 
    ```
    PROTON_FORCE_NVAPI=1 WINEDLLOVERRIDES="dxgi=n,b" %command%
    ```
 
-   If you use ReShade effects and copied its `d3dcompiler_47.dll` beside the game, add
-   `;d3dcompiler_47=n,b` inside `WINEDLLOVERRIDES`.
+   See the [**Launch Options**](https://github.com/NapXDD/addon-dlssnr-linux/wiki/Launch-Options)
+   wiki page for the full story: what each variable does per Proton build, the
+   `d3dcompiler_47` override for ReShade effects, how to verify from `ReShade.log`, and the
+   logging line to use when reporting a crash.
 
 4. Launch the game, enable **DLSS** in the graphics settings, then open the ReShade overlay
    (**Home** key) → **Add-ons** tab → **DLSSNR Linux**. Press **F10** any time to A/B toggle the
