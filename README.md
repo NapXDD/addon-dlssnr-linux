@@ -43,17 +43,24 @@ page for titles this has been tried in — and please add your own results there
 
 ### Prerequisites
 
-- An **RTX 50-series** GPU — DLSSNR is RTX 50 only — with a recent NVIDIA driver branch that
-  supports DLSS Neural Rendering.
+- An **RTX 50-series or RTX 40-series** GPU, with a recent NVIDIA driver branch that supports
+  DLSS Neural Rendering. The `nvngx_dlssnr.dll` model supports both generations; this add-on has
+  only been tested on RTX 50 so far, but is expected to work on RTX 40 — reports welcome.
 - **Proton** with NVAPI/NGX enabled, and **DLSS (Super Resolution) turned on in-game**: this add-on
   runs off the game's DLSS-SR output, so DLSS must be active.
 - **ReShade with add-on support** installed for the game's DX12 renderer (the `dxgi` variant).
 - The DLSS Neural Rendering model **`nvngx_dlssnr.dll`** present beside the game executable. It is
   NVIDIA's and is *not* shipped here; the add-on only drives it.
+  **The model build matters:** the add-on has only run stably with this exact model —
+  `sha256 e16bcf15e16e13f527491cdf7845b2fe6521a738d8f7c9c721866a8496e1fc8e` (165,840,496 bytes).
+  A different model version may not fail cleanly: in testing, a mismatched model reported Success
+  on every evaluate and then **crashed the game minutes into gameplay**. The add-on logs the
+  model's version and SHA-256 to `ReShade.log` at startup (`nr-fwd: model nvngx_dlssnr.dll ...`)
+  and warns when it isn't the tested build.
 
 **Tested environment:** NVIDIA GeForce RTX 5070 · Linux driver **610.57.04** · Fedora · KDE Plasma 6
-(**X11** session, kwin 6.7.3) · Proton. Other RTX 50 cards, drivers, and compositors are expected to
-work but are untested — see the [Tested Games](https://github.com/NapXDD/addon-dlssnr-linux/wiki/Tested-Games)
+(**X11** session, kwin 6.7.3) · Proton. Other RTX 50/40 cards, drivers, and compositors are expected
+to work but are untested — see the [Tested Games](https://github.com/NapXDD/addon-dlssnr-linux/wiki/Tested-Games)
 wiki and please report your own setup.
 
 > **First, make sure the game itself runs on Proton.** Check
@@ -67,11 +74,25 @@ wiki and please report your own setup.
    sit in the same folder as the game executable.
 2. Copy **both** `dlssnr-linux.addon64` and `nvngx.dll_nrfwd.dll` into that folder, next to the
    game executable and `nvngx_dlssnr.dll`.
-3. Set Steam launch options so Proton exposes NVAPI/NGX and loads ReShade's `dxgi`, e.g.:
+3. Set Steam launch options so Proton exposes NVAPI/NGX and loads ReShade's `dxgi`. The NVAPI
+   variable depends on which Proton build you run:
+
+   **Valve Proton** (Steam's built-in):
 
    ```
    PROTON_ENABLE_NVAPI=1 WINEDLLOVERRIDES="dxgi=n,b" %command%
    ```
+
+   **GE-Proton / proton-cachyos** (`PROTON_ENABLE_NVAPI` does not exist on these builds):
+
+   ```
+   PROTON_FORCE_NVAPI=1 WINEDLLOVERRIDES="dxgi=n,b" %command%
+   ```
+
+   See the [**Launch Options**](https://github.com/NapXDD/addon-dlssnr-linux/wiki/Launch-Options)
+   wiki page for the full story: what each variable does per Proton build, the
+   `d3dcompiler_47` override for ReShade effects, how to verify from `ReShade.log`, and the
+   logging line to use when reporting a crash.
 
 4. Launch the game, enable **DLSS** in the graphics settings, then open the ReShade overlay
    (**Home** key) → **Add-ons** tab → **DLSSNR Linux**. Press **F10** any time to A/B toggle the
@@ -100,16 +121,22 @@ bash build.sh
 those) and downloads the rest into your home directory. See `build.sh` for the exact paths it
 expects.
 
-`build.sh` writes the two files to `build/` and, if it finds the configured target folders,
-**auto-deploys** them there — so a local build drops straight into place with no manual copy.
-Adjust those deploy paths at the bottom of `build.sh` for your install.
+`build.sh` writes the two files to `build/` — it is a pure build, with no deploy step. To have a
+local build drop straight into your game or testbed folders, create an executable
+`deploy.local.sh` next to it (untracked; `build.sh` runs it after a successful build if present)
+that copies `build/dlssnr-linux.addon64` and `build/nvngx.dll_nrfwd.dll` wherever you need them.
+`build.sh --test` compiles the e2e test hooks in and marks the output (`build/.test-build`) so a
+deploy script can keep test builds out of game folders — `test/e2e-preset-crash.sh` uses that
+build to regression-test the retire/rebuild path against the DLSS SDK sample app. See
+[`test/README.md`](test/README.md) for the testbed setup and how to run it.
 
 ## Issues & support
 
 Hit a problem, or got it working somewhere new? Please
 [**open an issue**](https://github.com/NapXDD/addon-dlssnr-linux/issues) — I'll try my best to
 answer it. Include your GPU, NVIDIA driver version, Proton build, the game, and any relevant
-`nr-fwd:` lines from `ReShade.log`.
+`nr-fwd:` lines from `ReShade.log` — especially the `nr-fwd: model nvngx_dlssnr.dll ...` line,
+which identifies the model build you were running.
 
 ## Credits & acknowledgements
 

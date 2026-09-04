@@ -83,6 +83,55 @@ void OnPresent(reshade::api::command_queue*, reshade::api::swapchain*,
   f10_was_down = f10_down;
 }
 
+// --- settings persistence -------------------------------------------------
+// The tuning lives in ReShade's own config (ReShade.ini beside the game exe),
+// so it survives a game restart. Loaded once at attach — early enough, since
+// the NR feature is only built on the first DLSS evaluate — and saved from the
+// overlay whenever a control changes (ReShade batches the actual disk flush).
+// The Enabled flag and the debug view are deliberately not persisted: both are
+// transient A/B tools, and coming back up in a debug view would read as broken.
+
+constexpr char kConfigSection[] = "ADDON_DLSSNR_LINUX";
+
+float Clamp(float v, float min, float max) { return v < min ? min : (v > max ? max : v); }
+
+void LoadSettings() {
+  auto& s = nr_runner::s;
+  reshade::get_config_value(nullptr, kConfigSection, "DetailStrength", s.transfer);
+  reshade::get_config_value(nullptr, kConfigSection, "ColourStrength", s.colour_strength);
+  reshade::get_config_value(nullptr, kConfigSection, "HighlightGuard", s.max_ratio);
+  reshade::get_config_value(nullptr, kConfigSection, "WhitePointScale", s.wp_scale);
+  reshade::get_config_value(nullptr, kConfigSection, "Intensity", s.intensity);
+  reshade::get_config_value(nullptr, kConfigSection, "StructureIntensity", s.local_structure);
+  reshade::get_config_value(nullptr, kConfigSection, "GlobalIntensity", s.local_tone);
+  reshade::get_config_value(nullptr, kConfigSection, "Preset", s.preset);
+  reshade::get_config_value(nullptr, kConfigSection, "Style", s.style);
+
+  // A hand-edited ini must not push values past what the overlay allows.
+  s.transfer = Clamp(s.transfer, 0.0f, 1.5f);
+  s.colour_strength = Clamp(s.colour_strength, 0.0f, 1.0f);
+  s.max_ratio = Clamp(s.max_ratio, 1.0f, 8.0f);
+  s.wp_scale = Clamp(s.wp_scale, 0.1f, 4.0f);
+  s.intensity = Clamp(s.intensity, 0.0f, 2.0f);
+  s.local_structure = Clamp(s.local_structure, 0.0f, 2.0f);
+  s.local_tone = Clamp(s.local_tone, 0.0f, 2.0f);
+  if (s.preset < 0 || s.preset > 7) s.preset = 0;
+  if (s.style < 0 || s.style > 2) s.style = 0;
+}
+
+void SaveSettings() {
+  auto& s = nr_runner::s;
+  reshade::set_config_value(nullptr, kConfigSection, "DetailStrength", s.transfer);
+  reshade::set_config_value(nullptr, kConfigSection, "ColourStrength", s.colour_strength);
+  reshade::set_config_value(nullptr, kConfigSection, "HighlightGuard", s.max_ratio);
+  reshade::set_config_value(nullptr, kConfigSection, "WhitePointScale", s.wp_scale);
+  reshade::set_config_value(nullptr, kConfigSection, "Intensity", s.intensity);
+  reshade::set_config_value(nullptr, kConfigSection, "StructureIntensity", s.local_structure);
+  reshade::set_config_value(nullptr, kConfigSection, "GlobalIntensity", s.local_tone);
+  reshade::set_config_value(nullptr, kConfigSection, "Preset", s.preset);
+  reshade::set_config_value(nullptr, kConfigSection, "Style", s.style);
+}
+
 // A slider with a reset-to-default button on its right.
 bool SliderWithReset(const char* label, float* value, float min, float max, const char* fmt,
                      float default_value) {
@@ -105,10 +154,11 @@ void OnDrawOverlay(reshade::api::effect_runtime*) {
   bool enabled = nr_runner::IsEnabled();
   if (ImGui::Checkbox("Enable Neural Rendering (F10)", &enabled)) nr_runner::SetEnabled(enabled);
 
-  SliderWithReset("Detail strength", &s.transfer, 0.0f, 1.5f, "%.2f", 1.0f);
-  SliderWithReset("Colour strength", &s.colour_strength, 0.0f, 1.0f, "%.2f", 0.0f);
-  SliderWithReset("Highlight guard", &s.max_ratio, 1.0f, 8.0f, "%.1fx", 2.0f);
-  SliderWithReset("White point scale", &s.wp_scale, 0.1f, 4.0f, "%.2f", 1.0f);
+  bool changed = false;
+  changed |= SliderWithReset("Detail strength", &s.transfer, 0.0f, 1.5f, "%.2f", 1.0f);
+  changed |= SliderWithReset("Colour strength", &s.colour_strength, 0.0f, 1.0f, "%.2f", 0.0f);
+  changed |= SliderWithReset("Highlight guard", &s.max_ratio, 1.0f, 8.0f, "%.1fx", 2.0f);
+  changed |= SliderWithReset("White point scale", &s.wp_scale, 0.1f, 4.0f, "%.2f", 1.0f);
   if (s.wp_ema > 0.0f) {
     ImGui::Text("Measured white point: %.4f", s.wp_ema);
   } else {
@@ -123,13 +173,16 @@ void OnDrawOverlay(reshade::api::effect_runtime*) {
   // The three DLSSNR intensities, as in the RenoDX DLSS5 addon. NR intensity is the model's overall
   // hand; Structure intensity drives the fine detail it synthesises; Global intensity shapes the
   // broad local contrast/tone. All default to 1.0 (the model's neutral).
-  SliderWithReset("NR intensity", &s.intensity, 0.0f, 2.0f, "%.2f", 1.0f);
-  SliderWithReset("Structure intensity", &s.local_structure, 0.0f, 2.0f, "%.2f", 1.0f);
-  SliderWithReset("Global intensity", &s.local_tone, 0.0f, 2.0f, "%.2f", 1.0f);
-  ImGui::SliderInt("Preset", &s.preset, 0, 7);
+  changed |= SliderWithReset("NR intensity", &s.intensity, 0.0f, 2.0f, "%.2f", 1.0f);
+  changed |= SliderWithReset("Structure intensity", &s.local_structure, 0.0f, 2.0f, "%.2f", 1.0f);
+  changed |= SliderWithReset("Global intensity", &s.local_tone, 0.0f, 2.0f, "%.2f", 1.0f);
+  changed |= ImGui::SliderInt("Preset", &s.preset, 0, 7);
   ImGui::SameLine();
   ImGui::PushID("preset-reset");
-  if (ImGui::SmallButton("reset")) s.preset = 0;
+  if (ImGui::SmallButton("reset")) {
+    s.preset = 0;
+    changed = true;
+  }
   ImGui::PopID();
 
   // The model's own processing profiles (DLSSNR.Style). Names from community testing via
@@ -137,13 +190,18 @@ void OnDrawOverlay(reshade::api::effect_runtime*) {
   // stylised; Natural is the same detail with a gentler hand; Cinematic tones down the shine for
   // a film-like look.
   if (s.style > 2) s.style = 2;
-  ImGui::Combo("Style", &s.style, "Default (standard)\0Natural\0Cinematic\0");
+  changed |= ImGui::Combo("Style", &s.style, "Default (standard)\0Natural\0Cinematic\0");
   ImGui::SameLine();
   ImGui::PushID("style-reset");
-  if (ImGui::SmallButton("reset")) s.style = 0;
+  if (ImGui::SmallButton("reset")) {
+    s.style = 0;
+    changed = true;
+  }
   ImGui::PopID();
 
   if (ImGui::Button("Apply model settings")) nr_runner::ApplyModelSettings();
+
+  if (changed) SaveSettings();
 }
 
 }  // namespace
@@ -160,6 +218,7 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID) {
       reshade::log::message(reshade::log::level::info,
                             "DLSSNR Linux loaded (clang x86_64-pc-windows-msvc, built on Linux)");
       LogWineVersion();
+      LoadSettings();
       reshade::register_event<reshade::addon_event::init_swapchain>(OnInitSwapchain);
       reshade::register_event<reshade::addon_event::present>(OnPresent);
       reshade::register_overlay("DLSSNR Linux", OnDrawOverlay);
