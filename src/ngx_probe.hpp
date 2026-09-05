@@ -18,6 +18,7 @@
 #include <cstdarg>
 #include <cstdint>
 #include <cstdio>
+#include <iterator>
 
 #include <d3d11.h>
 #include <d3d12.h>
@@ -323,12 +324,37 @@ inline const HookEntry kHooks[] = {
 };
 
 inline bool installed = false;
+inline bool blocked = false;  // a state TryInstall must never retry out of
+
+// ReShade loads and unloads the addon DLL several times while the game creates
+// its device, and the NGX module (plus any detours patched into it) outlives
+// every one of those unloads. Whether OUR detours are currently patched in is
+// therefore a fact about the process, not about this DLL image — a fresh image
+// starts with installed == false no matter what the previous one left behind.
+// Reading the export's first bytes cannot recover the fact either: a stale
+// detour and a live one from another tool (hook chaining is legal) are byte
+// identical. So the fact lives in a named mapping that is deliberately never
+// closed: it survives our unload, and the next image finds it by name.
+// Nonzero while our detours are attached; zeroed by a clean detach.
+inline LONG* AttachedMarker() {
+  static LONG* marker = [] {
+    char name[64];
+    std::snprintf(name, sizeof(name), "Local\\dlssnr-ngx-hooks-%lu", GetCurrentProcessId());
+    const HANDLE mapping = CreateFileMappingA(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0,
+                                              sizeof(LONG), name);  // opens the existing one
+    if (mapping == nullptr) return static_cast<LONG*>(nullptr);
+    return static_cast<LONG*>(MapViewOfFile(mapping, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(LONG)));
+  }();
+  return marker;
+}
 
 // Try to attach to the first NGX module present in the process. Returns true
 // once hooks are installed (further calls are no-ops). Cheap when nothing is
-// loaded yet — safe to call every present until it succeeds.
+// loaded yet — safe to call every present until it succeeds. All-or-nothing:
+// either every export the module provides is hooked, or none are.
 inline bool TryInstall() {
   if (installed) return true;
+  if (blocked) return false;
 
   // _nvngx.dll first: the driver shim exports the documented app-facing API,
   // so our header signatures are exact. Snippet DLLs are the fallback.
@@ -346,6 +372,16 @@ inline bool TryInstall() {
   }
   if (module == nullptr) return false;
 
+  LONG* marker = AttachedMarker();
+  if (marker != nullptr && *marker != 0) {
+    // A previous image of this DLL was unloaded without detaching. Its detours
+    // point into freed memory; patching over them builds a jmp cycle (the GTA V
+    // Enhanced hang, issue #3). Nothing can repair the exports from here.
+    Warnf("ngx-probe: a previous load left its detours attached — not hooking");
+    blocked = true;
+    return false;
+  }
+
   if (DetourTransactionBegin() != NO_ERROR) {
     Log("ngx-probe: DetourTransactionBegin failed");
     return false;
@@ -353,31 +389,85 @@ inline bool TryInstall() {
   DetourUpdateThread(GetCurrentThread());
 
   int attached = 0;
+  bool failed = false;
   for (const auto& entry : kHooks) {
     FARPROC proc = GetProcAddress(module, entry.export_name);
     if (proc == nullptr) {
+      // Not an error: a snippet DLL legitimately carries only one API family.
       Logf("ngx-probe: %s not exported by %s", entry.export_name, module_name);
       continue;
     }
     *entry.real = reinterpret_cast<void*>(proc);
     if (DetourAttach(entry.real, entry.hook) != NO_ERROR) {
-      Logf("ngx-probe: DetourAttach failed for %s", entry.export_name);
-      *entry.real = nullptr;
-      continue;
+      Warnf("ngx-probe: DetourAttach failed for %s", entry.export_name);
+      failed = true;
+      break;
     }
     ++attached;
   }
 
-  if (DetourTransactionCommit() != NO_ERROR) {
-    Log("ngx-probe: DetourTransactionCommit failed");
+  if (failed || attached == 0) {
     DetourTransactionAbort();
+    for (const auto& entry : kHooks) *entry.real = nullptr;
+    // A failed attach is deterministic for a given export — retrying every
+    // present would only repeat it (and flood the log). Stay unhooked.
+    if (failed) blocked = true;
+    return false;
+  }
+  if (DetourTransactionCommit() != NO_ERROR) {
+    // A failed commit aborts the transaction itself: no patches were applied.
+    Log("ngx-probe: DetourTransactionCommit failed");
+    for (const auto& entry : kHooks) *entry.real = nullptr;
+    blocked = true;
     return false;
   }
 
-  if (attached == 0) return false;
+  if (marker != nullptr) *marker = 1;
   installed = true;
   Logf("ngx-probe: hooked %d NGX exports on %s", attached, module_name);
   return true;
+}
+
+// Mirror of TryInstall, for DllMain(DLL_PROCESS_DETACH) on FreeLibrary: the
+// detours must not outlive the DLL image they jump into. Anything left
+// attached here keeps the marker set, so no later load hooks on top of it.
+inline void Uninstall() {
+  if (!installed) return;
+
+  if (DetourTransactionBegin() != NO_ERROR) {
+    Warnf("ngx-probe: DetourTransactionBegin failed on uninstall — detours leak");
+    return;
+  }
+  DetourUpdateThread(GetCurrentThread());
+
+  bool queued[std::size(kHooks)] = {};
+  bool all = true;
+  int detached = 0;
+  for (size_t i = 0; i < std::size(kHooks); ++i) {
+    if (*kHooks[i].real == nullptr) continue;
+    if (DetourDetach(kHooks[i].real, kHooks[i].hook) != NO_ERROR) {
+      Warnf("ngx-probe: DetourDetach failed for %s — that detour leaks", kHooks[i].export_name);
+      all = false;
+      continue;
+    }
+    queued[i] = true;
+    ++detached;
+  }
+
+  if (DetourTransactionCommit() != NO_ERROR) {
+    // A failed commit aborts the transaction itself: everything stays patched.
+    Warnf("ngx-probe: DetourTransactionCommit failed on uninstall — detours leak");
+    return;
+  }
+
+  for (size_t i = 0; i < std::size(kHooks); ++i) {
+    if (queued[i]) *kHooks[i].real = nullptr;
+  }
+  installed = false;
+  if (all) {
+    if (LONG* marker = AttachedMarker(); marker != nullptr) *marker = 0;
+  }
+  Logf("ngx-probe: detached %d NGX hooks", detached);
 }
 
 }  // namespace ngx_probe

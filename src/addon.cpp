@@ -211,7 +211,7 @@ extern "C" __declspec(dllexport) const char* DESCRIPTION =
     "Runs NVIDIA DLSS 5 Neural Rendering (NGX feature 18) under Linux/Proton by driving the "
     "game-local snippet directly, with a display-referred colour bridge";
 
-BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID) {
+BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID lp_reserved) {
   switch (fdw_reason) {
     case DLL_PROCESS_ATTACH:
       if (!reshade::register_addon(h_module)) return FALSE;
@@ -225,6 +225,14 @@ BOOL APIENTRY DllMain(HMODULE h_module, DWORD fdw_reason, LPVOID) {
       ngx_probe::TryInstall();  // in case NGX is already resident
       break;
     case DLL_PROCESS_DETACH:
+      // Non-null lp_reserved: the process is terminating and every other
+      // thread is already dead, possibly mid-call under a lock. Unpatching
+      // code or waiting on threads here can deadlock the exit path, and the
+      // whole address space is going away — do nothing. Null lp_reserved is a
+      // real FreeLibrary (ReShade cycles the addon during device creation),
+      // where the detours must be removed before this image disappears.
+      if (lp_reserved != nullptr) break;
+      ngx_probe::Uninstall();
       nr_runner::Shutdown();
       reshade::unregister_overlay("DLSSNR Linux", OnDrawOverlay);
       reshade::unregister_event<reshade::addon_event::present>(OnPresent);

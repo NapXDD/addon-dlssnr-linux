@@ -4,6 +4,13 @@
 # Machine-local deployment hook (invoked by build.sh if present; never committed)
 /deploy.local.sh
 
+# Repro harness artifacts (built by test/repro-hook-layering/run.sh)
+/test/repro-hook-layering/*.exe
+/test/repro-hook-layering/*.dll
+/test/repro-hook-layering/*.addon64
+/test/repro-hook-layering/*.lib
+/test/repro-hook-layering/*.pdb
+
 # Editor / OS cruft
 *.swp
 .DS_Store
